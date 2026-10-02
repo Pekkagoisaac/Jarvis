@@ -111,7 +111,7 @@ function handle(raw){
   m=q.match(/(?:busca|buscar|search)\s+(.+)/);
   if(m){window.open('https://www.google.com/search?q='+encodeURIComponent(m[1]),'_blank','noopener');return say('Buscando, señor.')}
   m=q.match(/(?:traduce|traducir)\s+(.+?)\s+(?:al|a)\s+(\w+)/);
-  if(m){window.open('https://translate.google.com/?sl=auto&tl='+({ingl[eé]s:'en',frances:'fr',francés:'fr',alemán:'de',italiano:'it',portugués:'pt',japonés:'ja',chino:'zh-CN',árabe:'ar',ruso:'ru',español:'es'}[m[2]]||'en')+'&text='+encodeURIComponent(m[1]),'_blank','noopener');return say('Abriendo el traductor, señor.')}
+  if(m){window.open('https://translate.google.com/?sl=auto&tl='+({inglés:'en',ingles:'en',frances:'fr',francés:'fr',alemán:'de',italiano:'it',portugués:'pt',japonés:'ja',chino:'zh-CN',árabe:'ar',ruso:'ru',español:'es'}[m[2]]||'en')+'&text='+encodeURIComponent(m[1]),'_blank','noopener');return say('Abriendo el traductor, señor.')}
   m=q.match(/(?:di|habla|pronuncia)\s+(.+?)\s+en\s+(\w+)/);
   if(m){const c={ingl:'en-US',franc:'fr-FR',alem:'de-DE',ital:'it-IT',portu:'pt-BR',japo:'ja-JP',chin:'zh-CN',ruso:'ru-RU',arab:'ar-SA',espa:'es-ES'};const k=Object.keys(c).find(k=>m[2].startsWith(k));return say(m[1],k?c[k]:L)}
   const e=q.replace(/cu[aá]nto es|calcula/g,'').replace(/\bpor\b|x/g,'*').replace(/m[aá]s/g,'+').replace(/menos/g,'-').replace(/entre|dividido/g,'/').replace(/,/g,'.');
