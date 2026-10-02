@@ -90,6 +90,7 @@ const jokes=["¿Por qué los programadores confunden Halloween con Navidad? Porq
 function save(){try{localStorage.setItem('jn',JSON.stringify(notes))}catch(e){}}
 function handle(raw){
   raw=raw.trim();const q=raw.toLowerCase();if(!q)return;add('u','Isaac: '+raw);awake=Date.now()+9000;const h=new Date(),L=$('lang').value;
+  const sv=raw.match(/^servidor\s+(https:\/\/\S+)/i);if(sv){try{localStorage.setItem('jw',sv[1])}catch(e){}return say('Núcleo de inteligencia conectado, señor.')}
   if(/\b(time|hora|heure|uhrzeit|ora)\b/.test(q))return say(h.toLocaleTimeString(L,{hour:'2-digit',minute:'2-digit'}));
   if(/fecha|date|d[ií]a es hoy|today/.test(q))return say(h.toLocaleDateString(L,{weekday:'long',day:'numeric',month:'long',year:'numeric'}));
   if(/vers[ií]culo|biblia|ora por|oraci[oó]n/.test(q))return say(rnd(verses));
@@ -120,7 +121,10 @@ function handle(raw){
   if(/gracias/.test(q))return say(rnd(['Un placer, señor.','Para eso estoy.']));
   if(/hola|buenos|buenas|hello/.test(q))return say('Bienvenido, señor Isaac. ¿En qué puedo servirle?');
   if(/ayuda|qu[eé] puedes/.test(q))return say('Hora, fecha, cálculos, temporizadores y recordatorios, notas, cronómetro, estado del sistema, búsquedas, traducciones, apps web, chistes, versículos, y hablar en otros idiomas.');
-  say('No he comprendido, señor. Diga "ayuda" para ver mis funciones.')}
+  let W='';try{W=localStorage.getItem('jw')||''}catch(e){}
+  if(!W)return say('No he comprendido, señor. Diga "ayuda" para ver mis funciones.');
+  say('Un momento, señor.');
+  fetch(W,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:raw,lang:L})}).then(r=>{if(!r.ok)throw new Error('el puente respondió código '+r.status);return r.json()}).then(d=>say(d.reply||'El núcleo no devolvió respuesta, señor.')).catch(err=>{add('u','[Detalle técnico: '+err.message+' | dirección: '+W+']');say('No he podido conectar con mi núcleo, señor.')})}
 $('go').onclick=()=>{handle(inp.value);inp.value=''};
 inp.onkeydown=e=>{if(e.key==='Enter')$('go').click()};
 // Siri / Atajos: abrir con ?q=comando
