@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>J.A.R.V.I.S.</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#02060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#02060d;--fg:#bfefff;--ac:#19c3ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(circle at 50% 25%,#06223a,var(--bg) 70%);color:var(--fg);font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center}
+canvas{width:min(78vw,340px);height:min(78vw,340px);margin-top:6px;flex:none}
+#st{font-size:12px;letter-spacing:3px;color:var(--ac);opacity:.8;margin:2px 0}
+#log{flex:1;width:min(92vw,560px);overflow-y:auto;font-size:15px;line-height:1.4;padding:8px}
+.j{color:var(--ac)}.u{color:#fff;opacity:.8}
+#opts{display:flex;gap:6px;width:min(92vw,560px)}
+select{flex:1;min-width:0;background:#06182a;color:var(--fg);border:1px solid #1b4a66;border-radius:8px;padding:6px;font-size:13px}
+#bar{display:flex;gap:6px;width:min(92vw,560px);padding:8px 0 12px}
+input{flex:1;min-width:0;background:#06182a;border:1px solid var(--ac);color:var(--fg);border-radius:10px;padding:10px;font-size:16px}
+button{background:var(--ac);border:0;border-radius:10px;padding:10px 12px;font-size:16px;color:#001}
+button.on{background:#7dff9c}
+</style>
+</head>
+<body>
+<canvas id="c" width="680" height="680"></canvas>
+<div id="st">SISTEMAS EN LÍNEA</div>
+<div id="log"></div>
+<div id="opts"><select id="lang"></select><select id="voice"></select></div>
+<div id="bar"><input id="in" placeholder="Diga «Jarvis…» o escriba" autocomplete="off"><button id="ear" title="Escucha permanente">👂</button><button id="mic">🎤</button><button id="go">➤</button></div>
+<script>
+const $=id=>document.getElementById(id),cv=$('c'),x=cv.getContext('2d'),log=$('log'),inp=$('in');
+let t=0,energy=.3,speaking=false,listening=false,wake=true,awake=0,rec=null,notes=[],todo=[],sw0=0;
+try{notes=JSON.parse(localStorage.getItem('jn')||'[]')}catch(e){}
+const LANGS={'Español':'es-ES','English':'en-US','Français':'fr-FR','Deutsch':'de-DE','Italiano':'it-IT','Português':'pt-BR','日本語':'ja-JP','한국어':'ko-KR','中文':'zh-CN','Русский':'ru-RU','العربية':'ar-SA','हिन्दी':'hi-IN','Türkçe':'tr-TR','Nederlands':'nl-NL','Polski':'pl-PL','Svenska':'sv-SE','עברית':'he-IL','Ελληνικά':'el-GR','Українська':'uk-UA','Tiếng Việt':'vi-VN','Bahasa Indonesia':'id-ID','ไทย':'th-TH','Català':'ca-ES','Română':'ro-RO','Čeština':'cs-CZ','Dansk':'da-DK','Suomi':'fi-FI','Norsk':'nb-NO','Magyar':'hu-HU'};
+for(const k in LANGS){const o=document.createElement('option');o.value=LANGS[k];o.textContent=k;$('lang').appendChild(o)}
+let voices=[];
+function loadVoices(){
+  voices=speechSynthesis.getVoices();const l=$('lang').value.slice(0,2);
+  const f=voices.filter(v=>v.lang.toLowerCase().startsWith(l));
+  const score=v=>/natural|neural|premium|enhanced|online|siri|google/i.test(v.name)?0:1;
+  f.sort((a,b)=>score(a)-score(b));
+  $('voice').innerHTML='';f.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name;$('voice').appendChild(o)});
+}
+if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=loadVoices;loadVoices()}
+$('lang').onchange=()=>{loadVoices();if(listening){stopEar();startEar()}};
+// Cuerpo: esfera HUD estilo Jarvis
+const P=[...Array(70)].map(()=>({a:Math.random()*7,r:70+Math.random()*130,s:(Math.random()-.5)*.02,z:Math.random()}));
+function ring(cx,cy,r,w,dash,rot,al){x.save();x.translate(cx,cy);x.rotate(rot);x.strokeStyle=`rgba(90,210,255,${al})`;x.lineWidth=w;x.setLineDash(dash);x.beginPath();x.arc(0,0,r,0,7);x.stroke();x.restore()}
+function draw(){
+  t+=.02;const e=speaking?1:(listening&&awake>Date.now()?.7:.3+.08*Math.sin(t));energy+=(e-energy)*.08;
+  x.clearRect(0,0,680,680);const cx=340,cy=340+Math.sin(t*1.2)*8;
+  const R=80+energy*18,g=x.createRadialGradient(cx,cy,5,cx,cy,R*2.3);
+  g.addColorStop(0,'rgba(235,252,255,1)');g.addColorStop(.25,'rgba(80,215,255,.85)');g.addColorStop(.6,'rgba(20,130,230,.25)');g.addColorStop(1,'rgba(20,130,230,0)');
+  x.fillStyle=g;x.beginPath();x.arc(cx,cy,R*2.3,0,7);x.fill();
+  ring(cx,cy,R+40,3,[60,20],t,.9);ring(cx,cy,R+62,1.5,[4,8],-t*1.4,.7);ring(cx,cy,R+88,6,[120,40,10,40],t*.6,.6);ring(cx,cy,R+112,1,[2,6],t*.3,.5);
+  ring(cx,cy,R+20,2,[],0,.35+energy*.3);
+  P.forEach(p=>{p.a+=p.s*(1+energy*3);const rr=p.r+energy*25;x.fillStyle=`rgba(160,235,255,${.3+.5*p.z})`;x.fillRect(cx+Math.cos(p.a)*rr,cy+Math.sin(p.a)*rr*.9,2+p.z*2,2+p.z*2)});
+  requestAnimationFrame(draw)}
+draw();
+// Voz
+function say(m,lang){
+  add('j','JARVIS: '+m);
+  if(!('speechSynthesis' in window))return;
+  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(m);u.lang=lang||$('lang').value;
+  const v=voices.find(v=>v.name===$('voice').value);if(v&&!lang)u.voice=v;u.rate=.96;u.pitch=.92;
+  u.onstart=()=>{speaking=true;if(rec)try{rec.stop()}catch(e){}};u.onend=()=>{speaking=false;if(listening)setTimeout(startRec,300)};speechSynthesis.speak(u)}
+function add(c,m){const d=document.createElement('div');d.className=c;d.textContent=m;log.appendChild(d);log.scrollTop=log.scrollHeight}
+// Escucha permanente con palabra de activación
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function startRec(){
+  if(!SR||!listening||speaking)return;
+  rec=new SR();rec.lang=$('lang').value;rec.continuous=true;rec.interimResults=false;
+  rec.onresult=ev=>{const s=ev.results[ev.results.length-1][0].transcript.trim();
+    const m=s.match(/\b(j[aá]rvis|yarvis|jarvi|harvis|d[sz]arvis)\b[\s,.:]*(.*)/i);
+    if(m){awake=Date.now()+9000;$('st').textContent='ESCUCHANDO…';if(m[2])handle(m[2]);else say(rnd(['Dígame, señor.','A sus órdenes.','Lo escucho, señor.']))}
+    else if(awake>Date.now())handle(s)};
+  rec.onend=()=>{if(listening&&!speaking)setTimeout(startRec,250)};
+  rec.onerror=e=>{if(e.error==='not-allowed'){listening=false;$('ear').classList.remove('on');say('Necesito permiso de micrófono, señor.')}};
+  try{rec.start()}catch(e){}}
+function startEar(){if(!SR)return say('Este navegador no admite reconocimiento de voz.');listening=true;$('ear').classList.add('on');$('st').textContent='ESCUCHA ACTIVA · DIGA «JARVIS»';startRec()}
+function stopEar(){listening=false;$('ear').classList.remove('on');$('st').textContent='SISTEMAS EN LÍNEA';try{rec&&rec.stop()}catch(e){}}
+$('ear').onclick=()=>listening?stopEar():startEar();
+$('mic').onclick=()=>{if(!SR)return say('Este navegador no admite reconocimiento de voz.');const r=new SR();r.lang=$('lang').value;r.onresult=e=>handle(e.results[0][0].transcript);r.start()};
+// Funciones
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const verses=["Salmo 23:1 — El Señor es mi pastor, nada me faltará.","Josué 1:9 — Sé fuerte y valiente; Dios está contigo dondequiera que vayas.","Filipenses 4:13 — Todo lo puedo en Cristo que me fortalece.","Proverbios 3:5 — Confía en el Señor con todo tu corazón.","Isaías 41:10 — No temas, porque yo estoy contigo."];
+const jokes=["¿Por qué los programadores confunden Halloween con Navidad? Porque 31 de octubre es igual a 25 de diciembre.","Tengo un chiste sobre UDP, pero no sé si le llegará.","Un byte entra a un bar y pide una cerveza. El camarero dice: ¿Quiere un bit más?"];
+function save(){try{localStorage.setItem('jn',JSON.stringify(notes))}catch(e){}}
+function handle(raw){
+  raw=raw.trim();const q=raw.toLowerCase();if(!q)return;add('u','Isaac: '+raw);awake=Date.now()+9000;const h=new Date(),L=$('lang').value;
+  if(/\b(time|hora|heure|uhrzeit|ora)\b/.test(q))return say(h.toLocaleTimeString(L,{hour:'2-digit',minute:'2-digit'}));
+  if(/fecha|date|d[ií]a es hoy|today/.test(q))return say(h.toLocaleDateString(L,{weekday:'long',day:'numeric',month:'long',year:'numeric'}));
+  if(/vers[ií]culo|biblia|ora por|oraci[oó]n/.test(q))return say(rnd(verses));
+  if(/chiste|broma/.test(q))return say(rnd(jokes));
+  if(/moneda|cara o cruz/.test(q))return say(Math.random()<.5?'Cara.':'Cruz.');
+  if(/dado/.test(q))return say('Ha salido el '+(1+Math.floor(Math.random()*6))+'.');
+  if(/bater[ií]a|estado del sistema|diagn[oó]stico/.test(q)){
+    if(navigator.getBattery)return navigator.getBattery().then(b=>say('Batería al '+Math.round(b.level*100)+'%'+(b.charging?', cargando':'')+'. Conexión: '+(navigator.onLine?'en línea':'sin conexión')+'. Todos los sistemas operativos, señor.'));
+    return say('Conexión: '+(navigator.onLine?'en línea':'sin conexión')+'. Todos los sistemas operativos, señor.')}
+  let m=q.match(/(temporizador|recu[eé]rdame|recordatorio).*?(\d+)\s*(segundo|minuto|hora)s?(?:\s*(?:para|de que|que)\s+(.+))?/);
+  if(m){const s=+m[2]*({segundo:1,minuto:60,hora:3600}[m[3]]),txt=m[4]||'su temporizador ha terminado';setTimeout(()=>{say('Señor, '+txt+'.');if(navigator.vibrate)navigator.vibrate([300,150,300]);if('Notification' in window&&Notification.permission==='granted')new Notification('JARVIS',{body:txt})},s*1000);
+    if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();return say('Hecho. Se lo recordaré en '+m[2]+' '+m[3]+(m[2]>1?'s':'')+'.')}
+  if(/^(anota|nota|apunta)/.test(q)){notes.push(raw.replace(/^(anota|nota|apunta)\s*(que)?\s*/i,''));save();return say('Anotado, señor.')}
+  if(/mis notas|lee las notas/.test(q))return say(notes.length?'Sus notas: '+notes.join('. '):'No tiene notas guardadas.');
+  if(/borra.*notas/.test(q)){notes=[];save();return say('Notas eliminadas.')}
+  if(/cron[oó]metro/.test(q)){if(!sw0){sw0=Date.now();return say('Cronómetro iniciado.')}const s=Math.round((Date.now()-sw0)/1000);sw0=0;return say('Han transcurrido '+Math.floor(s/60)+' minutos y '+s%60+' segundos.')}
+  m=q.match(/abre (youtube|google|maps|wikipedia|spotify|whatsapp)/);
+  if(m){const u={youtube:'https://youtube.com',google:'https://google.com',maps:'https://maps.google.com',wikipedia:'https://es.wikipedia.org',spotify:'https://open.spotify.com',whatsapp:'https://web.whatsapp.com'}[m[1]];window.open(u,'_blank','noopener');return say('Abriendo '+m[1]+'.')}
+  m=q.match(/(?:busca|buscar|search)\s+(.+)/);
+  if(m){window.open('https://www.google.com/search?q='+encodeURIComponent(m[1]),'_blank','noopener');return say('Buscando, señor.')}
+  m=q.match(/(?:traduce|traducir)\s+(.+?)\s+(?:al|a)\s+(\w+)/);
+  if(m){window.open('https://translate.google.com/?sl=auto&tl='+({ingl[eé]s:'en',frances:'fr',francés:'fr',alemán:'de',italiano:'it',portugués:'pt',japonés:'ja',chino:'zh-CN',árabe:'ar',ruso:'ru',español:'es'}[m[2]]||'en')+'&text='+encodeURIComponent(m[1]),'_blank','noopener');return say('Abriendo el traductor, señor.')}
+  m=q.match(/(?:di|habla|pronuncia)\s+(.+?)\s+en\s+(\w+)/);
+  if(m){const c={ingl:'en-US',franc:'fr-FR',alem:'de-DE',ital:'it-IT',portu:'pt-BR',japo:'ja-JP',chin:'zh-CN',ruso:'ru-RU',arab:'ar-SA',espa:'es-ES'};const k=Object.keys(c).find(k=>m[2].startsWith(k));return say(m[1],k?c[k]:L)}
+  const e=q.replace(/cu[aá]nto es|calcula/g,'').replace(/\bpor\b|x/g,'*').replace(/m[aá]s/g,'+').replace(/menos/g,'-').replace(/entre|dividido/g,'/').replace(/,/g,'.');
+  if(/^[\d\s+\-*/().]+$/.test(e)&&/\d/.test(e)){try{return say('El resultado es '+Function('"use strict";return ('+e+')')())}catch(_){}}
+  if(/qui[eé]n eres|tu nombre/.test(q))return say('Soy J.A.R.V.I.S., su asistente personal, señor. A su servicio, bajo la guía de Dios.');
+  if(/gracias/.test(q))return say(rnd(['Un placer, señor.','Para eso estoy.']));
+  if(/hola|buenos|buenas|hello/.test(q))return say('Bienvenido, señor Isaac. ¿En qué puedo servirle?');
+  if(/ayuda|qu[eé] puedes/.test(q))return say('Hora, fecha, cálculos, temporizadores y recordatorios, notas, cronómetro, estado del sistema, búsquedas, traducciones, apps web, chistes, versículos, y hablar en otros idiomas.');
+  say('No he comprendido, señor. Diga "ayuda" para ver mis funciones.')}
+$('go').onclick=()=>{handle(inp.value);inp.value=''};
+inp.onkeydown=e=>{if(e.key==='Enter')$('go').click()};
+// Siri / Atajos: abrir con ?q=comando
+const qp=new URLSearchParams(location.search).get('q');
+setTimeout(()=>{qp?handle(qp):say('Sistemas en línea. Buenos días, señor Isaac.')},500);
+try{if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js')}catch(e){}
+</script>
+</body>
+</html>
