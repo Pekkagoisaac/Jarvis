@@ -60,11 +60,24 @@ function draw(){
   requestAnimationFrame(draw)}
 draw();
 // Voz
+function detect(t){
+  const S=[[/[\u0400-\u04FF]/,'ru-RU'],[/[\u0600-\u06FF]/,'ar-SA'],[/[\u0590-\u05FF]/,'he-IL'],[/[\u0370-\u03FF]/,'el-GR'],[/[\u0900-\u097F]/,'hi-IN'],[/[\u0E00-\u0E7F]/,'th-TH'],[/[\uAC00-\uD7AF]/,'ko-KR'],[/[\u3040-\u30FF]/,'ja-JP'],[/[\u4E00-\u9FFF]/,'zh-CN']];
+  for(const [r,l] of S)if(r.test(t))return l;
+  const W={'en-US':/\b(the|and|is|you|of|to|that|with|sir|for|this|are)\b/gi,'es-ES':/\b(el|la|los|las|que|de|es|y|un|una|con|por|para|señor)\b/gi,'fr-FR':/\b(le|les|des|est|et|une|vous|que|pour|avec|monsieur)\b/gi,'de-DE':/\b(der|die|das|und|ist|nicht|ein|ich|mit|sie|für)\b/gi,'it-IT':/\b(il|gli|che|di|un|una|con|per|signore)\b/gi,'pt-BR':/\b(os|as|que|um|uma|com|para|senhor|não)\b/gi,'nl-NL':/\b(de|het|een|en|niet|ik|je|met)\b/gi,'tr-TR':/\b(bir|ve|bu|için|ile|efendim)\b/gi};
+  let best=null,n=0;for(const l in W){const c=(t.match(W[l])||[]).length;if(c>n){n=c;best=l}}
+  return best}
+function pickVoice(lang){
+  const nl=x=>x.toLowerCase().replace('_','-'),p=nl(lang).slice(0,2);
+  const f=voices.filter(v=>nl(v.lang).startsWith(p));if(!f.length)return null;
+  const sel=f.find(v=>v.name===$('voice').value);if(sel)return sel;
+  const sc=v=>(/natural|neural|premium|enhanced|siri|google/i.test(v.name)?0:2)+(nl(v.lang)===nl(lang)?0:1);
+  return f.sort((a,b)=>sc(a)-sc(b))[0]}
 function say(m,lang){
   add('j','JARVIS: '+m);
   if(!('speechSynthesis' in window))return;
-  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(m);u.lang=lang||$('lang').value;
-  const v=voices.find(v=>v.name===$('voice').value);if(v&&!lang)u.voice=v;u.rate=.96;u.pitch=.92;
+  const L=lang||detect(m)||$('lang').value;
+  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(m);u.lang=L;
+  const v=pickVoice(L);if(v)u.voice=v;u.rate=.96;u.pitch=.92;
   u.onstart=()=>{speaking=true;if(rec)try{rec.stop()}catch(e){}};u.onend=()=>{speaking=false;if(listening)setTimeout(startRec,300)};speechSynthesis.speak(u)}
 function add(c,m){const d=document.createElement('div');d.className=c;d.textContent=m;log.appendChild(d);log.scrollTop=log.scrollHeight}
 // Escucha permanente con palabra de activación
